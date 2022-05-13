@@ -102,25 +102,25 @@ class Crypt
     {
         return $this->method;
     }
-    protected function doGenerateSalts(int $c = 16, int $l = 8): array
+    protected function doGenerateSalts(int $count = 16, int $length = 8): array
     {
         $salts = array();
-        for ($i = 0; $i < $c; $i++) {
-            \array_push($salts, $this->doGenerateSalt($l));
+        for ($i = 0; $i < $count; $i++) {
+            \array_push($salts, $this->doGenerateSalt($length));
         }
         return $salts;
     }
-    protected function doGenerateSalt(int $len = 8): array
+    protected function doGenerateSalt(int $length = 8): array
     {
         $r = array();
         foreach (array(
             \str_split("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"),
-            \str_split("!\"#$%&'()*+,/:;<=>?@")
+            \str_split("!\"#$%&'()*+,/:;<=>?@\\~[]^{}_")
         ) as $t) {
-            if ($len > \count($t)) {
+            if ($length > \count($t)) {
                 throw new \Exception("The length must be greater than " . \count($t));
             }
-            for ($i = 0; $i < $len; $i++) {
+            for ($i = 0; $i < $length; $i++) {
                 if ($i === 0) {
                     $c = array();
                 }
@@ -131,7 +131,7 @@ class Crypt
                     $i--;
                     continue;
                 }
-                if ($i === $len - 1) {
+                if ($i === $length - 1) {
                     $r[] = \implode("", $c);
                     break;
                 }
@@ -139,43 +139,43 @@ class Crypt
         }
         return $r;
     }
-    public function encrypt($s): string
+    public function encrypt(string $string): string
     {
         $iv = \openssl_random_pseudo_bytes(16);
         $k = \hash($this->hash, $this->key, true);
-        $encryption = \openssl_encrypt($s, $this->method, $k, 0, $iv);
+        $encryption = \openssl_encrypt($string, $this->method, $k, 0, $iv);
         $encryption = \strtr($encryption, '+/', '-.');
         $encryption = \rtrim($encryption, '=');
         $iv = \bin2hex($iv);
         $iv = \base64_encode($iv);
         $iv = \strtr($iv, '+/', '-.');
         $iv = \rtrim($iv, '=');
-        $s = $iv . $encryption;
+        $string = $iv . $encryption;
         if ($this->salt) {
             $salt_rand = \array_rand($this->salts);
             $salt_enc = \base64_encode(\str_pad($salt_rand, \strlen($this->salt_count) + 1, 0, STR_PAD_LEFT));
             $this->salt_enc_length = \strlen($salt_enc);
-            $s = $salt_enc . \str_replace(\str_split($this->salts[$salt_rand][0]), \str_split($this->salts[$salt_rand][1]), $s);
+            $string = $salt_enc . \str_replace(\str_split($this->salts[$salt_rand][0]), \str_split($this->salts[$salt_rand][1]), $string);
         }
-        return $s;
+        return $string;
     }
-    public function decrypt($h): ?string
+    public function decrypt(string $string): ?string
     {
         if ($this->salt) {
-            $salt_enc = \substr($h, 0, $this->salt_enc_length);
+            $salt_enc = \substr($string, 0, $this->salt_enc_length);
             $salt_rand = \intval(\base64_decode($salt_enc));
-            $h = \str_replace(\str_split($this->salts[$salt_rand][1]), \str_split($this->salts[$salt_rand][0]), $h);
-            $h = \substr($h, $this->salt_enc_length);
+            $string = \str_replace(\str_split($this->salts[$salt_rand][1]), \str_split($this->salts[$salt_rand][0]), $string);
+            $string = \substr($string, $this->salt_enc_length);
         }
-        $iv = \substr($h, 0, 43);
+        $iv = \substr($string, 0, 43);
         $iv = \strtr($iv, '-.', '+/');
         $iv = \base64_decode($iv);
         $iv = \hex2bin($iv);
         $k = \hash($this->hash, $this->key, true);
-        $decryption = \substr($h, 43);
+        $decryption = \substr($string, 43);
         $decryption = \strtr($decryption, '-.', '+/');
         $decryption = \openssl_decrypt($decryption, $this->method, $k, 0, $iv);
-        if ($decryption) {
+        if ($decryption !== false) {
             return $decryption;
         }
         return null;
