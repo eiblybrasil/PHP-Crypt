@@ -16,9 +16,9 @@ class Crypt
 {
     protected bool $salt = true;
     protected ?array $salts;
-    protected int $salt_length = 8;
-    protected int $salt_count = 64;
-    protected int $salt_enc_length;
+    protected int $salt_length = 6;
+    protected int $salt_count = 48;
+    private int $salt_enc_length;
     protected string $hash = "sha256";
     protected string $key = "";
     protected string $method = "aes-256-cbc";
@@ -51,11 +51,15 @@ class Crypt
                 }
                 if (\count($this->salts) < $this->salt_count) {
                     $this->salts = \array_merge($this->salts, $this->doGenerateSalts($this->salt_count - \count($this->salts)));
-                    \file_put_contents($file, \json_encode($this->salts));
+                    if (\file_put_contents($file, \json_encode($this->salts), LOCK_EX) === false) {
+                        throw new \Exception("Error writing salts file, please check the file permissions.");
+                    }
                 }
             } else {
                 $this->salts = $this->doGenerateSalts($this->salt_count, $this->salt_length);
-                \file_put_contents($file, \json_encode($this->salts));
+                if (\file_put_contents($file, \json_encode($this->salts), LOCK_EX) === false) {
+                    throw new \Exception("Error writing salts file, please check the file permissions.");
+                }
             }
         }
     }
@@ -66,6 +70,22 @@ class Crypt
     public function getSaltStatus(): bool
     {
         return $this->salt;
+    }
+    public function setSaltLength(int $salt_length): void
+    {
+        $this->salt_length = $salt_length;
+    }
+    public function getSaltLength(): int
+    {
+        return $this->salt_length;
+    }
+    public function setSaltCount(int $salt_count): void
+    {
+        $this->salt_count = $salt_count;
+    }
+    public function getSaltCount(): int
+    {
+        return $this->salt_count;
     }
     public function setHash(string $hash): void
     {
@@ -102,7 +122,7 @@ class Crypt
     {
         return $this->method;
     }
-    protected function doGenerateSalts(int $count = 16, int $length = 8): array
+    protected function doGenerateSalts(int $count = 64, int $length = 8): array
     {
         $salts = array();
         for ($i = 0; $i < $count; $i++) {
@@ -139,44 +159,47 @@ class Crypt
         }
         return $r;
     }
-    public function encrypt(string $string): string
+    public function encrypt(string $str): string
     {
         $iv = \openssl_random_pseudo_bytes(16);
-        $k = \hash($this->hash, $this->key, true);
-        $encryption = \openssl_encrypt($string, $this->method, $k, 0, $iv);
-        $encryption = \strtr($encryption, '+/', '-.');
-        $encryption = \rtrim($encryption, '=');
+        $key = \hash($this->hash, $this->key, true);
+        $enc = \openssl_encrypt($str, $this->method, $key, 0, $iv);
+        $enc = \strtr($enc, '+/', '-.');
+        $enc = \rtrim($enc, '=');
         $iv = \bin2hex($iv);
         $iv = \base64_encode($iv);
         $iv = \strtr($iv, '+/', '-.');
         $iv = \rtrim($iv, '=');
-        $string = $iv . $encryption;
+        $str = $iv . $enc;
         if ($this->salt) {
             $salt_rand = \array_rand($this->salts);
             $salt_enc = \base64_encode(\str_pad($salt_rand, \strlen($this->salt_count) + 1, 0, STR_PAD_LEFT));
+            $salt_enc = \strtr($salt_enc, '+/', '-.');
+            $salt_enc = \rtrim($salt_enc, '=');
             $this->salt_enc_length = \strlen($salt_enc);
-            $string = $salt_enc . \str_replace(\str_split($this->salts[$salt_rand][0]), \str_split($this->salts[$salt_rand][1]), $string);
+            $str = $salt_enc . \str_replace(\str_split($this->salts[$salt_rand][0]), \str_split($this->salts[$salt_rand][1]), $str);
         }
-        return $string;
+        return $str;
     }
-    public function decrypt(string $string): ?string
+    public function decrypt(string $str): ?string
     {
         if ($this->salt) {
-            $salt_enc = \substr($string, 0, $this->salt_enc_length);
+            $salt_enc = \substr($str, 0, $this->salt_enc_length);
+            $salt_enc = \strtr($salt_enc, '-.', '+/');
             $salt_rand = \intval(\base64_decode($salt_enc));
-            $string = \str_replace(\str_split($this->salts[$salt_rand][1]), \str_split($this->salts[$salt_rand][0]), $string);
-            $string = \substr($string, $this->salt_enc_length);
+            $str = \str_replace(\str_split($this->salts[$salt_rand][1]), \str_split($this->salts[$salt_rand][0]), $str);
+            $str = \substr($str, $this->salt_enc_length);
         }
-        $iv = \substr($string, 0, 43);
+        $iv = \substr($str, 0, 43);
         $iv = \strtr($iv, '-.', '+/');
         $iv = \base64_decode($iv);
         $iv = \hex2bin($iv);
-        $k = \hash($this->hash, $this->key, true);
-        $decryption = \substr($string, 43);
-        $decryption = \strtr($decryption, '-.', '+/');
-        $decryption = \openssl_decrypt($decryption, $this->method, $k, 0, $iv);
-        if ($decryption !== false) {
-            return $decryption;
+        $key = \hash($this->hash, $this->key, true);
+        $dec = \substr($str, 43);
+        $dec = \strtr($dec, '-.', '+/');
+        $dec = \openssl_decrypt($dec, $this->method, $key, 0, $iv);
+        if ($dec !== false) {
+            return \strval($dec);
         }
         return null;
     }
