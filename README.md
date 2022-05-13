@@ -1,15 +1,16 @@
 ## Using
 ```php
+<?php
 use Eibly\Crypt\Crypt;
 
 // function __construct(string $key = "", bool $salt = true, string $hash = "sha256", string $method = "aes-256-cbc")
 $crypt = new Crypt("your secret key");
 
-// function encrypt(mixed $data): string
+// function encrypt(string $string): string
 $value = $crypt->encrypt("content");
 // Result: $value = MDI2NTYwYTM5N2FiZWY0MDRmM2I5ZDU2OTM5OTg!NmRiZTYVZAuvIFt2Xm@eVug0eN)!A
 
-// function decrypt(string $hash): ?string
+// function decrypt(string $string): ?string
 $decrypted_value = $crypt->decrypt($value);
 // Result: $decrypted_value = content
 ```
@@ -31,6 +32,6 @@ function setMethod(string $method): void {...}
 function getMethod(): string {...}
 function doGenerateSalts(int $c = 16, int $l = 8): array {...}
 function doGenerateSalt(int $len = 8): array {...}
-function encrypt(mixed $data): string {...}
-function decrypt(string $hash): ?string {...}
+function encrypt(string $string): string {...}
+function decrypt(string $string): ?string {...}
 ```
