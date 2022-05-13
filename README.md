@@ -1,5 +1,3 @@
-# Eibly Class - Crypt
-
 ## Warnings:
 By default the salt mode will be used, but be careful.
 When running the first time, it will create a json file with an array of salts.
@@ -36,6 +34,3 @@ function doGenerateSalt(int $len = 8): array {...}
 function encrypt(mixed $string): string {...}
 function decrypt($h): ?string {...}
 ```
-
-
----------
